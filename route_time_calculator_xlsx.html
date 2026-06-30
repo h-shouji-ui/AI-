@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>巡回所要時間算出ツール（デモ.xlsx連携版）</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#1d2b22;
+    --paper:#f6f4ed;
+    --line:#cfd0c4;
+    --truck:#2f5d3a;
+    --truck-dark:#1f3f27;
+    --site:#b5532c;
+    --road:#7a7660;
+    --warn:#a83232;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Hiragino Sans","Yu Gothic",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1020px;margin:0 auto;padding:28px 20px 80px;}
+
+  header{
+    border-bottom:3px solid var(--ink);
+    padding-bottom:14px;
+    margin-bottom:22px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  header h1{font-size:22px;margin:0;letter-spacing:.04em;}
+  header .sub{font-size:12px;color:var(--road);margin-top:4px;}
+  .odometer{
+    font-family:"Courier New",monospace;
+    background:var(--truck-dark);
+    color:#e8e6d8;
+    padding:8px 16px;
+    border-radius:4px;
+    font-size:13px;
+    text-align:right;
+    line-height:1.5;
+  }
+  .odometer b{font-size:20px;display:block;letter-spacing:.05em;}
+
+  .panel{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:16px 18px;
+    margin-bottom:18px;
+  }
+  .panel h2{
+    font-size:13px;margin:0 0 12px;color:var(--road);
+    letter-spacing:.08em;text-transform:uppercase;
+    border-left:4px solid var(--truck);padding-left:8px;
+  }
+
+  .row-inline{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;}
+  label.field{font-size:12px;color:var(--road);display:flex;flex-direction:column;gap:4px;}
+  select,input[type=text],input[type=number],input[type=time]{
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:7px 9px;
+    font-size:14px;
+    font-family:inherit;
+    background:#fffdf8;
+    color:var(--ink);
+  }
+  select{min-width:160px;}
+  input:focus,select:focus{outline:2px solid var(--truck);outline-offset:1px;}
+
+  .dropzone{
+    border:2px dashed var(--line);
+    border-radius:8px;
+    padding:28px 16px;
+    text-align:center;
+    background:#fbfaf5;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .dropzone.dragover{
+    border-color:var(--truck);
+    background:#eef3ec;
+  }
+  .dropzone-icon{font-size:30px;margin-bottom:6px;}
+  .dropzone-text{font-size:14px;color:var(--ink);}
+  .dropzone-sub{font-size:12px;color:var(--road);margin-top:6px;}
+  .browse-link{color:var(--truck);text-decoration:underline;cursor:pointer;}
+    font-size:11.5px;
+    color:var(--road);
+    background:#eef0e3;
+    border-radius:4px;
+    padding:8px 10px;
+    margin-top:10px;
+    line-height:1.6;
+  }
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{
+    text-align:left;font-size:11px;color:var(--road);
+    border-bottom:2px solid var(--ink);padding:6px 6px;white-space:nowrap;
+  }
+  td{border-bottom:1px solid var(--line);padding:6px 6px;vertical-align:middle;}
+  tr.stop-row:hover{background:#fbf9f1;}
+  tr.note-row{opacity:.55;}
+  td input[type=text]{width:100%;min-width:110px;}
+  td input[type=number]{width:64px;text-align:right;}
+
+  .badge{display:inline-block;font-size:10.5px;padding:2px 7px;border-radius:10px;color:#fff;white-space:nowrap;}
+  .badge.work{background:var(--truck);}
+  .badge.note{background:var(--road);}
+
+  .chk{transform:scale(1.1);}
+
+  .btn{border:none;border-radius:4px;padding:7px 14px;font-size:13px;cursor:pointer;background:var(--truck);color:#fff;}
+  .btn:hover{background:var(--truck-dark);}
+  .btn.ghost{background:transparent;color:var(--road);border:1px solid var(--line);}
+  .btn.ghost:hover{background:#eee;}
+  .btn.danger{background:transparent;color:var(--warn);border:1px solid var(--warn);padding:3px 9px;font-size:11px;}
+  .btn.danger:hover{background:var(--warn);color:#fff;}
+
+  .add-bar{display:flex;justify-content:space-between;margin-top:10px;}
+
+  .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--ink);border-radius:6px;overflow:hidden;}
+  .summary .cell{background:var(--card);padding:14px 12px;}
+  .summary .cell .label{font-size:11px;color:var(--road);margin-bottom:4px;}
+  .summary .cell .value{font-size:22px;font-weight:bold;}
+  .summary .cell.alert .value{color:var(--warn);}
+  .summary .cell.ok .value{color:var(--truck);}
+
+  .route-strip{display:flex;flex-direction:column;padding:6px 4px;max-height:560px;overflow-y:auto;}
+  .node{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:8px 4px;
+  }
+  .node .dot{
+    flex:0 0 auto;
+    width:14px;height:14px;border-radius:50%;
+    background:var(--site);
+    border:2px solid #fff;box-shadow:0 0 0 1px var(--ink);
+  }
+  .node.start .dot{background:var(--truck);}
+  .node.end .dot{background:var(--warn);}
+  .node.break .dot{background:#b3791f;}
+  .node.break .name{color:#b3791f;}
+  .node.end .name{font-weight:bold;color:var(--warn);}
+  .node.end .time{color:var(--warn);font-weight:bold;}
+  .node .time{
+    flex:0 0 auto;
+    width:52px;
+    font-size:12px;color:var(--road);
+    font-family:"Courier New",monospace;
+    text-align:right;
+  }
+  .node .name{font-size:13.5px;line-height:1.3;color:var(--ink);}
+  .seg-line{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding-left:6px;
+  }
+  .seg-line .rule{
+    width:14px;
+    display:flex;
+    justify-content:center;
+  }
+  .seg-line .rule::before{
+    content:'';
+    width:2px;
+    height:22px;
+    background:var(--line);
+  }
+  .seg-line .min{
+    width:52px;
+    flex:0 0 auto;
+  }
+  .seg-line .min-text{
+    font-size:11px;
+    color:var(--road);
+    white-space:nowrap;
+  }
+
+  tr.break-row{background:#fdf3e7;}
+  tr.break-row:hover{background:#fbeada;}
+  tr.final-row{background:#eef2f7;}
+  tr.final-row:hover{background:#e6ecf4;}
+  .badge.break{background:#b3791f;}
+  .badge.final{background:#3a5a8c;}
+  .insert-break-btn{
+    border:none;background:transparent;color:var(--road);
+    font-size:10px;cursor:pointer;padding:2px;text-decoration:underline;
+    white-space:nowrap;
+  }
+  .insert-break-btn:hover{color:var(--truck);}
+  .item-pill{
+    display:inline-flex;align-items:center;gap:4px;
+    background:#eef0e3;border:1px solid var(--line);border-radius:12px;
+    padding:3px 9px 3px 6px;font-size:11.5px;cursor:pointer;white-space:nowrap;
+  }
+  .item-pill input{transform:scale(.95);}
+  .item-pill.required{border-color:#e0a8a0;}
+  .item-pill.checked{background:var(--truck);color:#fff;border-color:var(--truck-dark);}
+  .item-pill .min-tag{color:var(--road);font-size:10px;}
+  .item-pill.checked .min-tag{color:#dfe8de;}
+
+  #historyTable tbody tr.history-row:hover{background:#fbf9f1;}
+  #historyTable td{font-size:12.5px;}
+  .history-detail{
+    background:#fbfaf5;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:14px 16px;
+    margin:6px 0;
+  }
+  .history-detail-info{font-size:12px;color:var(--road);}
+  .history-detail-subtitle{
+    font-size:12px;color:var(--road);margin-top:14px;margin-bottom:4px;
+    border-left:3px solid var(--truck);padding-left:6px;
+  }
+  .history-detail table{font-size:12.5px;}
+  .history-detail .route-strip{overflow-y:auto;}
+
+  .collab-banner{
+    font-size:12px;
+    border-radius:6px;
+    padding:8px 12px;
+    margin-bottom:16px;
+    line-height:1.6;
+  }
+  .collab-banner.on{background:#e7f0e3;color:var(--truck-dark);border:1px solid #b9d4ad;}
+  .collab-banner.off{background:#f4e9d8;color:#7a5a18;border:1px solid #e0c896;}
+
+  @media (max-width:680px){
+    .summary{grid-template-columns:repeat(2,1fr);}
+    .odometer{font-size:11px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>巡回所要時間算出ツール</h1>
+      <div class="sub">検証対象日：<b id="dateLabel" style="color:var(--truck);">未読込</b></div>
+    </div>
+    <div class="odometer">総所要 <b id="hdrTotal">--:--</b></div>
+  </header>
+
+  <div class="collab-banner" id="collabBanner"></div>
+
+  <div class="panel">
+    <h2>配車表Excelの読み込み</h2>
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-icon">📂</div>
+      <div class="dropzone-text">ここに配車表Excel（.xlsx）をドラッグ＆ドロップ</div>
+      <div class="dropzone-sub">または<span id="browseLink" class="browse-link">クリックしてファイルを選択</span></div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;">
+    </div>
+    <div id="fileStatus" style="font-size:12px;color:var(--road);margin-top:8px;"></div>
+    <div class="source-note">
+      新しい配車表Excelを読み込むと、その日付・運転手・物件データに切り替わります。日付ごとに保存データは別管理されるため、別の日のExcelを読み込んでも以前の編集内容が混ざることはありません。</div>
+  </div>
+
+  <div class="panel">
+    <h2>項目マスタ（物件ごとの作業項目・所要時間）</h2>
+    <table id="itemTable">
+      <thead>
+        <tr>
+          <th style="width:24px;"></th>
+          <th>項目名</th>
+          <th style="width:90px;">区分</th>
+          <th style="width:80px;">分</th>
+          <th style="width:36px;"></th>
+        </tr>
+      </thead>
+      <tbody id="itemBody"></tbody>
+    </table>
+    <div class="add-bar">
+      <button class="btn ghost" id="addItem">＋ 項目を追加</button>
+      <span style="font-size:11.5px;color:var(--road);">各物件の行で項目にチェックすると、その分数が作業時間に加算されます</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>運転手・出発条件</h2>
+    <div class="row-inline">
+      <label class="field">運転手
+        <select id="driverSelect"></select>
+      </label>
+      <label class="field">車番
+        <input type="text" id="carNo" readonly style="background:#f1efe6;width:90px;">
+      </label>
+      <label class="field">出発地点
+        <input type="text" id="startName" value="（株）サイコー 仙台岩切">
+      </label>
+      <label class="field">出発時刻
+        <input type="time" id="startTime" value="08:10">
+      </label>
+      <label class="field">㎥あたりの回収時間（分）
+        <input type="number" id="minutesPerM3" value="5" min="0" step="0.5" style="width:70px;">
+      </label>
+    </div>
+    <div class="source-note">
+      配車表の各セルから物件名・容積（㎥）を自動抽出していますが、元データには住所や明確な容積が含まれていないため、「廃棄物　2」のような件数表記や「移動」「自社」などの注記もそのまま行として読み込んでいます。チェックを外すと作業時間の集計から除外、行は自由に編集・削除・追加できます。容積はセル内に「2m3」等の記載がある場合のみ自動入力、それ以外は 0 です（手動で修正してください）。移動時間はGoogleマップ実測値を分単位で入力してください。
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>物件・停車リスト（停車順）</h2>
+    <table id="stopTable">
+      <thead>
+        <tr>
+          <th style="width:24px;"></th>
+          <th style="width:30px;">対象</th>
+          <th>物件名／注記</th>
+          <th style="width:80px;">容積(㎥)</th>
+          <th>適用項目（チェックで時間加算）</th>
+          <th style="width:90px;">作業時間</th>
+          <th style="width:140px;">移動時間（前の地点から／分）</th>
+          <th style="width:36px;"></th>
+        </tr>
+      </thead>
+      <tbody id="stopBody"></tbody>
+    </table>
+    <div class="add-bar">
+      <span>
+        <button class="btn ghost" id="addStop">＋ 物件を追加</button>
+        <button class="btn ghost" id="addBreak" style="margin-left:6px;">＋ 休憩を追加（末尾／1時間）</button>
+      </span>
+      <button class="btn ghost" id="reload">この運転手のデータを再読込</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>ルート概観</h2>
+    <div class="route-strip" id="routeStrip"></div>
+  </div>
+
+  <div class="summary" id="summaryGrid"></div>
+
+  <div class="panel" style="margin-top:18px;">
+    <div class="row-inline" style="justify-content:space-between;">
+      <h2 style="margin:0;">検証結果ログ（複数車両の結果を保存・比較）</h2>
+      <span>
+        <button class="btn ghost" id="refreshHistory" style="margin-right:6px;">🔄 最新の状態に更新</button>
+        <button class="btn" id="saveResult">この内容を検証結果として保存</button>
+      </span>
+    </div>
+    <table id="historyTable" style="margin-top:12px;">
+      <thead>
+        <tr>
+          <th style="width:100px;">保存日時</th>
+          <th style="width:120px;">対象日</th>
+          <th>運転手</th>
+          <th style="width:70px;">車番</th>
+          <th style="width:70px;">出発</th>
+          <th style="width:90px;">作業時間</th>
+          <th style="width:90px;">移動時間</th>
+          <th style="width:90px;">総所要</th>
+          <th style="width:70px;">終了予定</th>
+          <th style="width:100px;"></th>
+        </tr>
+      </thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+    <div class="source-note" id="historyEmpty" style="display:none;">まだ保存された検証結果はありません。上のボタンで現在の運転手・条件の結果を保存できます。複数の運転手で保存しても、ここに全件残ります。</div>
+  </div>
+
+  <footer>容積・移動時間は元データの精度に応じて手動調整してください。移動時間はGoogleマップ等の実測値推奨です。</footer>
+
+</div>
+
+<script>
+let RAW_DATA = {"date": "2026年7月2日（木）", "drivers": {"今野恵": {"carNo": 3001, "stops": [{"text": "飯田電精機", "volume": 0}, {"text": "2m3×1", "volume": 2.0}, {"text": "前倒しで回収", "volume": 0}, {"text": "移動", "volume": 0}, {"text": "ダイナム気仙沼", "volume": 0}, {"text": "(ダイキンエアテクノ)", "volume": 0}, {"text": "廃棄物　2", "volume": 0}, {"text": "自社", "volume": 0}, {"text": "成田", "volume": 0}]}, "小野之大": {"carNo": null, "stops": []}, "木村高志": {"carNo": 3570, "stops": [{"text": "OGSコーポレーション", "volume": 0}, {"text": "キャノンマーケティング", "volume": 0}, {"text": "電脳", "volume": 0}, {"text": "hair＆spa teef", "volume": 0}, {"text": "PM指定", "volume": 0}, {"text": "サンエトワール長町", "volume": 0}, {"text": "ヨドバシ建物", "volume": 0}, {"text": "アコール", "volume": 0}, {"text": "自社　鈴木工業", "volume": 0}, {"text": "クリーンセンター", "volume": 0}]}, "高橋健太朗": {"carNo": 6390, "stops": [{"text": "早出", "volume": 0}, {"text": "一番町郵便局", "volume": 0}, {"text": "廃棄物　2", "volume": 0}, {"text": "広瀬通郵便局", "volume": 0}, {"text": "廃棄物　2", "volume": 0}, {"text": "綾", "volume": 0}, {"text": "オートバックス古川", "volume": 0}, {"text": "蛍光灯", "volume": 0}, {"text": "クリーンセンター", "volume": 0}, {"text": "大友", "volume": 0}, {"text": "早上がり", "volume": 0}]}, "蜂屋一貴": {"carNo": 2796, "stops": [{"text": "兼松ヒューチャーテックソリューションズ　大和事業所", "volume": 0}, {"text": "廃棄物", "volume": 0}, {"text": "※現地タイミー１名", "volume": 0}, {"text": "自社", "volume": 0}, {"text": "鈴木工業", "volume": 0}, {"text": "石垣", "volume": 0}, {"text": "東北フジパン", "volume": 0}, {"text": "日本デリカフレッシュ", "volume": 0}, {"text": "早く帰る16時には退社", "volume": 0}]}, "佐藤隆平": {"carNo": 2797, "stops": [{"text": "デュプロ", "volume": 0}, {"text": "バック時上部注意", "volume": 0}, {"text": "青南商事", "volume": 0}, {"text": "（塩釜）", "volume": 0}, {"text": "大昭運輸", "volume": 0}, {"text": "廃棄物", "volume": 0}, {"text": "PM", "volume": 0}]}, "政井健二": {"carNo": 4395, "stops": [{"text": "丸亀製麺ルート", "volume": 0}, {"text": "古川中島店", "volume": 0}, {"text": "廃棄物　1", "volume": 0}, {"text": "仙台泉店", "volume": 0}, {"text": "廃棄物　1", "volume": 0}, {"text": "中野栄店", "volume": 0}, {"text": "廃棄物", "volume": 0}, {"text": "ランプ類荷下ろし", "volume": 0}, {"text": "サンキョウリサイクル", "volume": 0}, {"text": "15：00以降", "volume": 0}, {"text": "仙台駅東口店", "volume": 0}, {"text": "自社　サンキョウリサイクル", "volume": 0}, {"text": "ユウロ", "volume": 0}]}, "西村勝彦": {"carNo": 2035, "stops": [{"text": "自動配車枠", "volume": 0}, {"text": "毎週（木）（金）", "volume": 0}, {"text": "車輌人員固定", "volume": 0}, {"text": "東邦運輸", "volume": 0}, {"text": "廃棄物　５", "volume": 0}, {"text": "自社", "volume": 0}, {"text": "安孫子", "volume": 0}]}, "三浦凌太郎": {"carNo": 2636, "stops": [{"text": "2m3カゴ", "volume": 2.0}, {"text": "引き取り", "volume": 0}, {"text": "１０台", "volume": 0}, {"text": "ピストン", "volume": 0}, {"text": "伏見さん確認", "volume": 0}, {"text": "サンデリカ", "volume": 0}, {"text": "仙台第二営業所", "volume": 0}, {"text": "ベルトコンベア", "volume": 0}, {"text": "ユニック指定", "volume": 0}, {"text": "自社", "volume": 0}, {"text": "石垣", "volume": 0}]}, "阿部凌太": {"carNo": 694, "stops": [{"text": "ロジパルエクスプレス", "volume": 0}, {"text": "イオンファンタジー", "volume": 0}, {"text": "廃棄物", "volume": 0}, {"text": "青南塩釜", "volume": 0}, {"text": "２回戦", "volume": 0}, {"text": "高田", "volume": 0}, {"text": "16:00~", "volume": 0}, {"text": "役割者MT", "volume": 0}]}, "秋元弘樹": {"carNo": 2304, "stops": [{"text": "㈱DAIWA", "volume": 0}, {"text": "（旧大和電設）", "volume": 0}, {"text": "自社10", "volume": 0}, {"text": "機密　データ破壊あり", "volume": 0}, {"text": "祐路", "volume": 0}, {"text": "事務所", "volume": 0}]}, "浮須啓介": {"carNo": 2658, "stops": [{"text": "東配", "volume": 0}, {"text": "廃棄物　6", "volume": 0}, {"text": "蛍光灯出るかも", "volume": 0}, {"text": "自社　クリーン", "volume": 0}, {"text": "祐路", "volume": 0}, {"text": "13：30指定", "volume": 0}, {"text": "エス・アイ・ロジ", "volume": 0}, {"text": "仙台泉物流センター", "volume": 0}, {"text": "汚泥7ﾊﾟﾚ", "volume": 0}, {"text": "廃プラ2フレコン", "volume": 0}, {"text": "（フレコン交換持参）", "volume": 0}, {"text": "（パレット後日返却）", "volume": 0}, {"text": "自社　バイオ", "volume": 0}, {"text": "祐路", "volume": 0}]}, "狭山優樹": {"carNo": null, "stops": []}, "布施　丈": {"carNo": null, "stops": [{"text": "ルートダイヤ同行", "volume": 0}, {"text": "木村さん同行", "volume": 0}, {"text": "サンドラック", "volume": 0}, {"text": "廃棄物　ｐ10　ｍ2", "volume": 0}, {"text": "回収前", "volume": 0}, {"text": "禁気品センター確認", "volume": 0}]}, "庄司大昂": {"carNo": null, "stops": [{"text": "キャンセル", "volume": 0}, {"text": "IJTT宮城工場", "volume": 0}, {"text": "IHI回転機械", "volume": 0}, {"text": "ﾌﾟﾗ、金属", "volume": 0}, {"text": "（青南塩竃）", "volume": 0}, {"text": "鈴木工業あるかも", "volume": 0}, {"text": "祐路", "volume": 0}]}}};
+
+const ITEM_MASTER_KEY = 'route_calc_item_master_v1';
+const HISTORY_KEY = 'route_calc_history_v1';
+// ↓↓↓ 管理者用：GASウェブアプリをデプロイしたら、発行されたURL（末尾が /exec）を
+//     ここに貼り付けてください。これだけで、このHTMLを開く全員が自動的に
+//     同じGoogleスプレッドシートを共有するようになります（各利用者の設定は不要）。
+const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbz8jXLbSQkGOSeQ8OpP1RE9v4r9TqneF5NTuIHsS_nEEGiTl5vslZmPuB9gou5-cpuF/exec';
+// ↑↑↑ 例: 'https://script.google.com/macros/s/AKfycby.../exec'
+
+const GAS_URL_KEY = 'route_calc_gas_url_v1';
+
+let GAS_URL = GAS_WEBAPP_URL;
+if(!GAS_URL){
+  try{ GAS_URL = localStorage.getItem(GAS_URL_KEY) || ''; }catch(e){}
+}
+
+let HAS_SHARED_STORAGE = (typeof window !== 'undefined' && !!window.storage) || !!GAS_URL;
+
+async function sharedGet(key){
+  if(GAS_URL){
+    try{
+      const res = await fetch(`${GAS_URL}?action=get&key=${encodeURIComponent(key)}`);
+      const data = await res.json();
+      return (data && data.value !== undefined) ? data.value : null;
+    }catch(e){
+      console.error('GAS取得エラー', e);
+      return null;
+    }
+  }
+  if(typeof window !== 'undefined' && window.storage){
+    try{
+      const res = await window.storage.get(key, true);
+      return res ? res.value : null;
+    }catch(e){
+      return null;
+    }
+  }
+  return null;
+}
+async function sharedSet(key, value){
+  if(GAS_URL){
+    try{
+      await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action:'set', key, value })
+      });
+      return true;
+    }catch(e){
+      console.error('GAS保存エラー', e);
+      return false;
+    }
+  }
+  if(typeof window !== 'undefined' && window.storage){
+    try{
+      await window.storage.set(key, value, true);
+      return true;
+    }catch(e){
+      console.error('共有ストレージへの保存に失敗しました', e);
+      return false;
+    }
+  }
+  return false;
+}
+
+const DEFAULT_ITEMS = [
+  { id:'i1', name:'駐車位置確認', type:'必須', min:5 },
+  { id:'i2', name:'セキュリティ確認', type:'必須', min:4 },
+  { id:'i3', name:'階数や案内確認', type:'必須', min:3 },
+  { id:'i4', name:'エレベーター確認', type:'必須', min:2 },
+  { id:'i5', name:'搬出経路確認', type:'推奨', min:1 },
+  { id:'i6', name:'廃棄物分別確認', type:'必須', min:2 },
+  { id:'i7', name:'作業可否確認', type:'推奨', min:3 },
+  { id:'i8', name:'立会者確認', type:'推奨', min:4 },
+  { id:'i9', name:'マニフェスト記入', type:'必須', min:5 },
+  { id:'i10', name:'最終確認', type:'推奨', min:1 },
+];
+
+let itemMaster = [];
+
+async function loadItemMaster(){
+  if(HAS_SHARED_STORAGE){
+    const raw = await sharedGet(ITEM_MASTER_KEY);
+    if(raw){ itemMaster = JSON.parse(raw); return; }
+    itemMaster = JSON.parse(JSON.stringify(DEFAULT_ITEMS));
+    await saveItemMaster();
+    return;
+  }
+  try{
+    const raw = localStorage.getItem(ITEM_MASTER_KEY);
+    if(raw){ itemMaster = JSON.parse(raw); return; }
+  }catch(e){}
+  itemMaster = JSON.parse(JSON.stringify(DEFAULT_ITEMS));
+  saveItemMaster();
+}
+async function saveItemMaster(){
+  if(HAS_SHARED_STORAGE){
+    await sharedSet(ITEM_MASTER_KEY, JSON.stringify(itemMaster));
+    return;
+  }
+  try{ localStorage.setItem(ITEM_MASTER_KEY, JSON.stringify(itemMaster)); }catch(e){}
+}
+
+async function loadHistory(){
+  if(HAS_SHARED_STORAGE){
+    const raw = await sharedGet(HISTORY_KEY);
+    if(raw) return JSON.parse(raw);
+    return [];
+  }
+  try{
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return [];
+}
+async function saveHistory(list){
+  if(HAS_SHARED_STORAGE){
+    await sharedSet(HISTORY_KEY, JSON.stringify(list));
+    return;
+  }
+  try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }catch(e){}
+}
+
+
+
+function defaultStateForDriver(name){
+  const d = RAW_DATA.drivers[name] || { carNo: null, stops: [] };
+  return {
+    driver: name,
+    carNo: d.carNo,
+    startName: '（株）サイコー 仙台岩切',
+    startTime: '08:10',
+    minutesPerM3: 5,
+    stops: d.stops.map(s => ({
+      type: 'stop',
+      name: s.text,
+      volume: s.volume,
+      travelMin: 0,
+      include: true,
+      itemChecks: {}
+    })),
+    finalStop: {
+      type: 'final',
+      name: '最終荷下ろし場所',
+      volume: 0,
+      travelMin: 0,
+      include: true,
+      itemChecks: {}
+    }
+  };
+}
+
+function storageKey(name){ return 'route_calc_xlsx_' + (RAW_DATA.date || 'unknown') + '_' + name; }
+
+function normalizeState(s){
+  s.stops.forEach(st => { if(!st.type) st.type = 'stop'; if(!st.itemChecks) st.itemChecks = {}; });
+  if(!s.finalStop){
+    s.finalStop = { type:'final', name:'最終荷下ろし場所', volume:0, travelMin:0, include:true, itemChecks:{} };
+  }
+  return s;
+}
+
+async function loadDriver(name, forceReload){
+  if(!forceReload){
+    let raw = null;
+    if(HAS_SHARED_STORAGE){
+      raw = await sharedGet(storageKey(name));
+    } else {
+      try{ raw = localStorage.getItem(storageKey(name)); }catch(e){}
+    }
+    if(raw){
+      state = normalizeState(JSON.parse(raw));
+      renderAll();
+      return;
+    }
+  }
+  state = defaultStateForDriver(name);
+  await save();
+  renderAll();
+}
+
+async function save(){
+  const payload = JSON.stringify(state);
+  if(HAS_SHARED_STORAGE){
+    await sharedSet(storageKey(state.driver), payload);
+    return;
+  }
+  try{ localStorage.setItem(storageKey(state.driver), payload); }catch(e){}
+}
+
+function googleMapsUrl(origin, destination){
+  const o = encodeURIComponent(origin || '');
+  const d = encodeURIComponent(destination || '');
+  return `https://www.google.com/maps/dir/?api=1&origin=${o}&destination=${d}&travelmode=driving`;
+}
+
+function originNameFor(idx){
+  if(idx === 'final'){
+    for(let i = state.stops.length - 1; i >= 0; i--){
+      if(state.stops[i].name) return state.stops[i].name;
+    }
+    return state.startName;
+  }
+  for(let i = idx - 1; i >= 0; i--){
+    if(state.stops[i].name) return state.stops[i].name;
+  }
+  return state.startName;
+}
+
+function workMinutes(stop){
+  if(stop.type === 'break'){
+    return Number(stop.breakMin) || 0;
+  }
+  const v = Number(stop.volume) || 0;
+  let total = v * Number(state.minutesPerM3 || 0);
+  const checks = stop.itemChecks || {};
+  itemMaster.forEach(item => {
+    if(checks[item.id]) total += Number(item.min) || 0;
+  });
+  return total;
+}
+
+function fmtMin(totalMin){
+  const m = Math.round(totalMin);
+  const h = Math.floor(m/60);
+  const mm = m%60;
+  return (h>0 ? h+'時間' : '') + mm + '分';
+}
+
+function fmtClock(baseTimeStr, addMin){
+  const [h,m] = baseTimeStr.split(':').map(Number);
+  let total = h*60+m+addMin;
+  total = ((total % 1440)+1440)%1440;
+  const hh = String(Math.floor(total/60)).padStart(2,'0');
+  const mm = String(Math.round(total%60)).padStart(2,'0');
+  return hh+':'+mm;
+}
+
+function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function parseWorkbookArrayBuffer(buf){
+  const wb = XLSX.read(buf, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  if(!ws['!ref']) throw new Error('シートにデータがありません');
+  const range = XLSX.utils.decode_range(ws['!ref']);
+
+  function cellAt(r,c){ return ws[XLSX.utils.encode_cell({r,c})]; }
+  function valAt(r,c){ const cell = cellAt(r,c); return cell ? cell.v : undefined; }
+
+  const dateY = valAt(0,1), dateM = valAt(0,3), dateD = valAt(0,5), dateW = valAt(0,7);
+
+  const skipRows = new Set([0]);
+  for(let r = range.s.r; r <= range.e.r; r++){
+    const v = valAt(r,0);
+    if(['人員','シフト','車番','備考'].includes(v)) skipRows.add(r);
+  }
+
+  const volRe = /(\d+(?:\.\d+)?)\s*[ｍm][3３]/;
+
+  const driverCols = {};
+  for(let c = 1; c <= range.e.c; c++){
+    const name = valAt(1,c);
+    if(name !== undefined && name !== null && name !== '' && name !== '#N/A'){
+      driverCols[c] = String(name);
+    }
+  }
+
+  const drivers = {};
+  Object.keys(driverCols).forEach(cStr => {
+    const c = Number(cStr);
+    const name = driverCols[c];
+    const carNo = valAt(3,c);
+    const stops = [];
+    for(let r = range.s.r; r <= range.e.r; r++){
+      if(skipRows.has(r)) continue;
+      const cell = cellAt(r,c);
+      if(!cell || cell.v === undefined || cell.v === null || cell.v === '') continue;
+      const v = cell.v;
+      if(typeof v === 'number' && cell.w && /^\d{1,2}[:：]\d{2}/.test(cell.w)) continue;
+      const text = String(v);
+      if(text === '出番' || text === '有給' || text === '#N/A') continue;
+      const m = volRe.exec(text);
+      const vol = m ? parseFloat(m[1]) : 0;
+      stops.push({ text, volume: vol });
+    }
+    drivers[name] = { carNo: carNo !== undefined ? carNo : null, stops };
+  });
+
+  if(Object.keys(drivers).length === 0){
+    throw new Error('運転手の列（2行目）が見つかりませんでした。配車表の形式をご確認ください。');
+  }
+
+  return {
+    date: `${dateY}年${dateM}月${dateD}日${dateW}`,
+    drivers
+  };
+}
+
+function handleExcelFile(file){
+  if(!file) return;
+  const status = document.getElementById('fileStatus');
+  status.textContent = '読み込み中...';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{
+      const buf = new Uint8Array(ev.target.result);
+      const parsed = parseWorkbookArrayBuffer(buf);
+      RAW_DATA = parsed;
+      populateDriverSelect();
+      const firstDriver = Object.keys(RAW_DATA.drivers).find(n => RAW_DATA.drivers[n].stops.length > 0) || Object.keys(RAW_DATA.drivers)[0];
+      loadDriver(firstDriver, false);
+      status.textContent = `読込完了：${file.name}（${RAW_DATA.date}）`;
+    }catch(err){
+      status.textContent = '読み込みエラー：' + err.message;
+    }
+  };
+  reader.onerror = () => { status.textContent = 'ファイルの読み込みに失敗しました'; };
+  reader.readAsArrayBuffer(file);
+}
+
+const dropzone = document.getElementById('dropzone');
+const fileInputEl = document.getElementById('fileInput');
+
+dropzone.addEventListener('click', e => {
+  if(e.target.id !== 'browseLink' && e.target.closest('#dropzone') !== dropzone) return;
+  fileInputEl.click();
+});
+fileInputEl.addEventListener('change', e => {
+  handleExcelFile(e.target.files[0]);
+});
+
+['dragenter','dragover'].forEach(evt => {
+  dropzone.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation();
+    dropzone.classList.add('dragover');
+  });
+});
+['dragleave','dragend'].forEach(evt => {
+  dropzone.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation();
+    dropzone.classList.remove('dragover');
+  });
+});
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); e.stopPropagation();
+  dropzone.classList.remove('dragover');
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(file) handleExcelFile(file);
+});
+
+function updateCollabBanner(){
+  const banner = document.getElementById('collabBanner');
+  if(GAS_URL){
+    banner.className = 'collab-banner on';
+    banner.textContent = '🔗 共同編集モード（GAS連携）：Googleスプレッドシート経由で項目マスタ・物件リスト・検証結果ログを共有しています。このURLとGAS設定を使えば、GitHub Pagesなどに置いたこのHTMLを誰が開いても同じデータを見られます。';
+  } else if(typeof window !== 'undefined' && window.storage){
+    banner.className = 'collab-banner on';
+    banner.textContent = '🔗 共同編集モード（Claude共有ストレージ）：このツールを開いている全員が同じデータを共有しています。ダウンロードして個別に開いた場合はこのモードは無効になります。';
+  } else {
+    banner.className = 'collab-banner off';
+    banner.textContent = '⚠️ このブラウザ内のみの保存です。下の「GAS連携」を設定すると、GitHub Pagesなどで配布しても複数人で同じデータを共有できます。';
+  }
+}
+
+function populateDriverSelect(){
+  const sel = document.getElementById('driverSelect');
+  sel.innerHTML = '';
+  Object.keys(RAW_DATA.drivers).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name + `（${RAW_DATA.drivers[name].stops.length}件）`;
+    sel.appendChild(opt);
+  });
+}
+
+function renderHeader(){
+  document.getElementById('dateLabel').textContent = RAW_DATA.date;
+  document.getElementById('driverSelect').value = state.driver;
+  document.getElementById('carNo').value = state.carNo || '（未割当）';
+  document.getElementById('startName').value = state.startName;
+  document.getElementById('startTime').value = state.startTime;
+  document.getElementById('minutesPerM3').value = state.minutesPerM3;
+}
+
+function renderStops(){
+  const tbody = document.getElementById('stopBody');
+  tbody.innerHTML = '';
+
+  function pillsHtml(stop, idx){
+    return itemMaster.map(item => {
+      const checked = !!(stop.itemChecks && stop.itemChecks[item.id]);
+      return `<label class="item-pill ${item.type==='必須'?'required':''} ${checked?'checked':''}">
+        <input type="checkbox" data-idx="${idx}" data-item="${item.id}" ${checked?'checked':''}>
+        ${escapeHtml(item.name)}<span class="min-tag">${item.min}分</span>
+      </label>`;
+    }).join('');
+  }
+
+  state.stops.forEach((stop, idx) => {
+    if(!stop.itemChecks) stop.itemChecks = {};
+    if(!stop.type) stop.type = 'stop';
+    const tr = document.createElement('tr');
+
+    if(stop.type === 'break'){
+      tr.className = 'break-row';
+      tr.innerHTML = `
+        <td style="color:var(--road);font-size:12px;">${idx+1}</td>
+        <td style="text-align:center;"><input class="chk" type="checkbox" data-idx="${idx}" data-field="include" ${stop.include ? 'checked':''}></td>
+        <td><input type="text" data-idx="${idx}" data-field="name" value="${escapeAttr(stop.name)}" placeholder="休憩"></td>
+        <td colspan="2" style="color:var(--road);font-size:12px;">
+          休憩時間：<input type="number" data-idx="${idx}" data-field="breakMin" value="${stop.breakMin}" min="0" step="5" style="width:64px;"> 分
+        </td>
+        <td><span class="badge break">${stop.include ? workMinutes(stop).toFixed(0)+'分' : '対象外'}</span></td>
+        <td>
+          <input type="number" data-idx="${idx}" data-field="travelMin" value="${stop.travelMin}" min="0" step="1"> 分
+          <div><a class="insert-break-btn" href="${googleMapsUrl(originNameFor(idx), stop.name)}" target="_blank" rel="noopener">🗺️ ルート検索</a></div>
+        </td>
+        <td><button class="btn danger" data-idx="${idx}" data-action="remove">×</button></td>
+      `;
+    } else {
+      const work = workMinutes(stop);
+      tr.className = 'stop-row' + (stop.include ? '' : ' note-row');
+      tr.innerHTML = `
+        <td style="color:var(--road);font-size:12px;">${idx+1}</td>
+        <td style="text-align:center;"><input class="chk" type="checkbox" data-idx="${idx}" data-field="include" ${stop.include ? 'checked':''}></td>
+        <td>
+          <input type="text" data-idx="${idx}" data-field="name" value="${escapeAttr(stop.name)}" placeholder="物件名／注記">
+          <div><button class="insert-break-btn" data-idx="${idx}" data-action="insertBreak">＋この後に休憩を挿入</button></div>
+        </td>
+        <td><input type="number" data-idx="${idx}" data-field="volume" value="${stop.volume}" min="0" step="0.1"></td>
+        <td><div class="item-checks">${pillsHtml(stop, idx)}</div></td>
+        <td><span class="badge ${stop.include ? 'work' : 'note'}">${stop.include ? work.toFixed(1)+'分' : '対象外'}</span></td>
+        <td>
+          <input type="number" data-idx="${idx}" data-field="travelMin" value="${stop.travelMin}" min="0" step="1"> 分
+          <div><a class="insert-break-btn" href="${googleMapsUrl(originNameFor(idx), stop.name)}" target="_blank" rel="noopener">🗺️ ルート検索</a></div>
+        </td>
+        <td><button class="btn danger" data-idx="${idx}" data-action="remove">×</button></td>
+      `;
+    }
+    tbody.appendChild(tr);
+  });
+
+  // 最終荷下ろし場所（固定行）
+  const fIdx = 'final';
+  const fStop = state.finalStop;
+  if(!fStop.itemChecks) fStop.itemChecks = {};
+  const fWork = workMinutes(fStop);
+  const finalTr = document.createElement('tr');
+  finalTr.className = 'final-row';
+  finalTr.innerHTML = `
+    <td style="color:var(--road);font-size:12px;">最終</td>
+    <td style="text-align:center;"><input class="chk" type="checkbox" data-idx="${fIdx}" data-field="include" ${fStop.include ? 'checked':''}></td>
+    <td><input type="text" data-idx="${fIdx}" data-field="name" value="${escapeAttr(fStop.name)}" placeholder="最終荷下ろし場所"></td>
+    <td><input type="number" data-idx="${fIdx}" data-field="volume" value="${fStop.volume}" min="0" step="0.1"></td>
+    <td><div class="item-checks">${pillsHtml(fStop, fIdx)}</div></td>
+    <td><span class="badge final">${fStop.include ? fWork.toFixed(1)+'分' : '対象外'}</span></td>
+    <td>
+      <input type="number" data-idx="${fIdx}" data-field="travelMin" value="${fStop.travelMin}" min="0" step="1"> 分
+      <div><a class="insert-break-btn" href="${googleMapsUrl(originNameFor(fIdx), fStop.name)}" target="_blank" rel="noopener">🗺️ ルート検索</a></div>
+    </td>
+    <td style="color:var(--road);font-size:11px;">固定</td>
+  `;
+  tbody.appendChild(finalTr);
+
+  function getTarget(idx){
+    return idx === 'final' ? state.finalStop : state.stops[idx];
+  }
+
+  tbody.querySelectorAll('input[type=text],td input[type=number]').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const idx = e.target.dataset.idx === 'final' ? 'final' : Number(e.target.dataset.idx);
+      const field = e.target.dataset.field;
+      if(!field) return;
+      let val = e.target.value;
+      if(field === 'volume' || field === 'travelMin' || field === 'breakMin') val = Number(val);
+      getTarget(idx)[field] = val;
+      save(); renderStops(); renderSummary(); renderRoute();
+    });
+  });
+  tbody.querySelectorAll('input[data-field=include]').forEach(inp => {
+    inp.addEventListener('change', e => {
+      const idx = e.target.dataset.idx === 'final' ? 'final' : Number(e.target.dataset.idx);
+      getTarget(idx).include = e.target.checked;
+      save(); renderStops(); renderSummary(); renderRoute();
+    });
+  });
+  tbody.querySelectorAll('input[data-item]').forEach(inp => {
+    inp.addEventListener('change', e => {
+      const idx = e.target.dataset.idx === 'final' ? 'final' : Number(e.target.dataset.idx);
+      const itemId = e.target.dataset.item;
+      const t = getTarget(idx);
+      if(!t.itemChecks) t.itemChecks = {};
+      t.itemChecks[itemId] = e.target.checked;
+      save(); renderStops(); renderSummary(); renderRoute();
+    });
+  });
+  tbody.querySelectorAll('button[data-action=remove]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const idx = Number(e.target.dataset.idx);
+      state.stops.splice(idx,1);
+      save(); renderStops(); renderSummary(); renderRoute();
+    });
+  });
+  tbody.querySelectorAll('button[data-action=insertBreak]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const idx = Number(e.target.dataset.idx);
+      state.stops.splice(idx+1, 0, { type:'break', name:'休憩', volume:0, breakMin:60, travelMin:0, include:true, itemChecks:{} });
+      save(); renderStops(); renderSummary(); renderRoute();
+    });
+  });
+}
+
+function computeTotals(){
+  let totalWork = 0, totalTravel = 0;
+  let clock = state.startTime;
+  const timeline = [{ name: state.startName, time: clock, isStart:true }];
+
+  function processStop(stop, isBreak){
+    const travel = Number(stop.travelMin)||0;
+    totalTravel += travel;
+    clock = fmtClock(clock, travel);
+    const arrival = clock;
+    const w = stop.include ? workMinutes(stop) : 0;
+    totalWork += w;
+    clock = fmtClock(clock, w);
+    timeline.push({ name: stop.name, arrival, travelMin: travel, isBreak });
+  }
+
+  state.stops.forEach(stop => processStop(stop, stop.type === 'break'));
+  processStop(state.finalStop, false);
+
+  timeline.push({ name: '業務終了', arrival: clock, travelMin: 0, isEnd: true });
+
+  return { totalWork, totalTravel, clock, timeline };
+}
+
+function renderSummary(){
+  const { totalWork, totalTravel, clock } = computeTotals();
+  const total = totalWork + totalTravel;
+  const grid = document.getElementById('summaryGrid');
+  grid.innerHTML = `
+    <div class="cell"><div class="label">作業時間合計</div><div class="value">${fmtMin(totalWork)}</div></div>
+    <div class="cell"><div class="label">移動時間合計</div><div class="value">${fmtMin(totalTravel)}</div></div>
+    <div class="cell ${total>480?'alert':'ok'}"><div class="label">総所要時間</div><div class="value">${fmtMin(total)}</div></div>
+    <div class="cell"><div class="label">最終到着予定</div><div class="value">${clock}</div></div>
+  `;
+  document.getElementById('hdrTotal').textContent = fmtMin(total);
+}
+
+function renderRoute(){
+  const { timeline } = computeTotals();
+  const strip = document.getElementById('routeStrip');
+  strip.innerHTML = '';
+  timeline.forEach((node, i) => {
+    const div = document.createElement('div');
+    div.className = 'node' + (node.isStart ? ' start' : '') + (node.isEnd ? ' end' : '') + (node.isBreak ? ' break' : '');
+    div.innerHTML = `
+      <div class="time">${node.isStart ? node.time : node.arrival}</div>
+      <div class="dot"></div>
+      <div class="name">${node.isBreak ? '☕ ' : ''}${escapeHtml(node.name || '（無題）')}</div>
+    `;
+    strip.appendChild(div);
+    if(i < timeline.length - 1){
+      const next = timeline[i+1];
+      const seg = document.createElement('div');
+      seg.className = 'seg-line';
+      const label = next.isEnd ? '↓ 最終作業終了まで' : `↓ ${next.travelMin}分移動`;
+      seg.innerHTML = `<div class="min"></div><div class="rule"></div><div class="min-text">${label}</div>`;
+      strip.appendChild(seg);
+    }
+  });
+}
+
+function renderItemMaster(){
+  const tbody = document.getElementById('itemBody');
+  tbody.innerHTML = '';
+  itemMaster.forEach((item, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="color:var(--road);font-size:12px;">${idx+1}</td>
+      <td><input type="text" data-idx="${idx}" data-field="name" value="${escapeAttr(item.name)}"></td>
+      <td>
+        <select data-idx="${idx}" data-field="type">
+          <option value="必須" ${item.type==='必須'?'selected':''}>必須</option>
+          <option value="推奨" ${item.type==='推奨'?'selected':''}>推奨</option>
+        </select>
+      </td>
+      <td><input type="number" data-idx="${idx}" data-field="min" value="${item.min}" min="0" step="0.5"></td>
+      <td><button class="btn danger" data-idx="${idx}" data-action="removeItem">×</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('input,select').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const idx = Number(e.target.dataset.idx);
+      const field = e.target.dataset.field;
+      let val = e.target.value;
+      if(field === 'min') val = Number(val);
+      itemMaster[idx][field] = val;
+      saveItemMaster();
+      renderStops(); renderSummary();
+    });
+    inp.addEventListener('change', e => {
+      const idx = Number(e.target.dataset.idx);
+      const field = e.target.dataset.field;
+      let val = e.target.value;
+      if(field === 'min') val = Number(val);
+      itemMaster[idx][field] = val;
+      saveItemMaster();
+      renderStops(); renderSummary();
+    });
+  });
+  tbody.querySelectorAll('button[data-action=removeItem]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const idx = Number(e.target.dataset.idx);
+      itemMaster.splice(idx,1);
+      saveItemMaster();
+      renderItemMaster(); renderStops(); renderSummary();
+    });
+  });
+}
+
+async function renderHistory(){
+  const history = await loadHistory();
+  const tbody = document.getElementById('historyBody');
+  const empty = document.getElementById('historyEmpty');
+  tbody.innerHTML = '';
+  if(history.length === 0){
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  history.slice().reverse().forEach(rec => {
+    const tr = document.createElement('tr');
+    tr.className = 'history-row';
+    tr.dataset.id = rec.id;
+    tr.innerHTML = `
+      <td>${escapeHtml(rec.savedAt)}</td>
+      <td>${escapeHtml(rec.date || '-')}</td>
+      <td>${escapeHtml(rec.driver)}</td>
+      <td>${escapeHtml(rec.carNo || '-')}</td>
+      <td>${escapeHtml(rec.startTime)}</td>
+      <td>${fmtMin(rec.totalWork)}</td>
+      <td>${fmtMin(rec.totalTravel)}</td>
+      <td>${fmtMin(rec.total)}</td>
+      <td>${escapeHtml(rec.finalTime)}</td>
+      <td>
+        <button class="btn ghost" style="padding:3px 9px;font-size:11px;" data-id="${rec.id}" data-action="toggleDetail">詳細</button>
+        <button class="btn danger" data-id="${rec.id}" data-action="removeHistory">×</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    const detailTr = document.createElement('tr');
+    detailTr.className = 'history-detail-row';
+    detailTr.dataset.detailFor = rec.id;
+    detailTr.style.display = 'none';
+    const detailTd = document.createElement('td');
+    detailTd.colSpan = 10;
+    detailTd.appendChild(buildHistoryDetail(rec));
+    detailTr.appendChild(detailTd);
+    tbody.appendChild(detailTr);
+  });
+
+  tbody.querySelectorAll('button[data-action=removeHistory]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      const id = e.target.dataset.id;
+      const list = (await loadHistory()).filter(r => r.id !== id);
+      await saveHistory(list);
+      renderHistory();
+    });
+  });
+  tbody.querySelectorAll('button[data-action=toggleDetail]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const id = e.target.dataset.id;
+      const row = tbody.querySelector(`tr.history-detail-row[data-detail-for="${id}"]`);
+      if(row){
+        row.style.display = row.style.display === 'none' ? '' : 'none';
+        e.target.textContent = row.style.display === 'none' ? '詳細' : '閉じる';
+      }
+    });
+  });
+}
+
+function buildHistoryDetail(rec){
+  const wrap = document.createElement('div');
+  wrap.className = 'history-detail';
+
+  const info = document.createElement('div');
+  info.className = 'history-detail-info';
+  info.textContent = `出発地点：${rec.startName || '-'}　／　㎥あたり：${rec.minutesPerM3}分`;
+  wrap.appendChild(info);
+
+  const table = document.createElement('table');
+  table.style.marginTop = '8px';
+  const thead = document.createElement('thead');
+  thead.innerHTML = `<tr>
+    <th style="width:24px;"></th>
+    <th>物件名／注記</th>
+    <th style="width:80px;">容積(㎥)</th>
+    <th style="width:90px;">作業時間</th>
+    <th style="width:90px;">移動時間</th>
+  </tr>`;
+  table.appendChild(thead);
+  const tb = document.createElement('tbody');
+  (rec.stopDetails || []).forEach((s, i) => {
+    const tr = document.createElement('tr');
+    const typeBadge = s.type === 'break' ? '<span class="badge break">休憩</span>' : (s.include ? '' : '<span class="badge note">対象外</span>');
+    tr.innerHTML = `
+      <td style="font-size:11px;color:var(--road);">${i+1}</td>
+      <td>${escapeHtml(s.name || '（無題）')} ${typeBadge}</td>
+      <td>${s.volume || 0}</td>
+      <td>${s.include ? s.work.toFixed(1)+'分' : '-'}</td>
+      <td>${s.travelMin || 0}分</td>
+    `;
+    tb.appendChild(tr);
+  });
+  if(rec.finalDetail){
+    const f = rec.finalDetail;
+    const tr = document.createElement('tr');
+    tr.style.background = '#eef2f7';
+    tr.innerHTML = `
+      <td style="font-size:11px;color:var(--road);">最終</td>
+      <td>${escapeHtml(f.name || '最終荷下ろし場所')}</td>
+      <td>${f.volume || 0}</td>
+      <td>${f.include ? f.work.toFixed(1)+'分' : '-'}</td>
+      <td>${f.travelMin || 0}分</td>
+    `;
+    tb.appendChild(tr);
+  }
+  table.appendChild(tb);
+  wrap.appendChild(table);
+
+  const routeTitle = document.createElement('div');
+  routeTitle.className = 'history-detail-subtitle';
+  routeTitle.textContent = 'ルート概観（保存時点）';
+  wrap.appendChild(routeTitle);
+
+  const strip = document.createElement('div');
+  strip.className = 'route-strip';
+  strip.style.maxHeight = '320px';
+  (rec.timeline || []).forEach((node, i) => {
+    const div = document.createElement('div');
+    div.className = 'node' + (node.isStart ? ' start' : '') + (node.isEnd ? ' end' : '') + (node.isBreak ? ' break' : '');
+    div.innerHTML = `
+      <div class="time">${node.isStart ? node.time : node.arrival}</div>
+      <div class="dot"></div>
+      <div class="name">${node.isBreak ? '☕ ' : ''}${escapeHtml(node.name || '（無題）')}</div>
+    `;
+    strip.appendChild(div);
+    const timeline = rec.timeline;
+    if(i < timeline.length - 1){
+      const next = timeline[i+1];
+      const seg = document.createElement('div');
+      seg.className = 'seg-line';
+      const label = next.isEnd ? '↓ 最終作業終了まで' : `↓ ${next.travelMin}分移動`;
+      seg.innerHTML = `<div class="min"></div><div class="rule"></div><div class="min-text">${label}</div>`;
+      strip.appendChild(seg);
+    }
+  });
+  wrap.appendChild(strip);
+
+  return wrap;
+}
+
+function renderAll(){
+  renderHeader();
+  renderStops();
+  renderSummary();
+  renderRoute();
+  renderItemMaster();
+  renderHistory();
+}
+
+document.getElementById('driverSelect').addEventListener('change', e => {
+  loadDriver(e.target.value, false);
+});
+document.getElementById('reload').addEventListener('click', () => {
+  if(confirm('現在の編集内容を破棄して、配車表データから再読込します。よろしいですか？')){
+    loadDriver(state.driver, true);
+  }
+});
+document.getElementById('startName').addEventListener('input', e => { state.startName = e.target.value; save(); renderRoute(); });
+document.getElementById('startTime').addEventListener('input', e => { state.startTime = e.target.value; save(); renderSummary(); renderRoute(); });
+document.getElementById('minutesPerM3').addEventListener('input', e => { state.minutesPerM3 = Number(e.target.value); save(); renderStops(); renderSummary(); renderRoute(); });
+document.getElementById('addStop').addEventListener('click', () => {
+  state.stops.push({ type:'stop', name:'', volume:0, travelMin:0, include:true, itemChecks:{} });
+  save(); renderStops(); renderSummary(); renderRoute();
+});
+document.getElementById('addBreak').addEventListener('click', () => {
+  state.stops.push({ type:'break', name:'休憩', volume:0, breakMin:60, travelMin:0, include:true, itemChecks:{} });
+  save(); renderStops(); renderSummary(); renderRoute();
+});
+
+document.getElementById('addItem').addEventListener('click', () => {
+  const newId = 'i' + (Date.now());
+  itemMaster.push({ id:newId, name:'新規項目', type:'推奨', min:1 });
+  saveItemMaster();
+  renderItemMaster(); renderStops(); renderSummary();
+});
+
+document.getElementById('refreshHistory').addEventListener('click', () => {
+  renderHistory();
+});
+
+document.getElementById('saveResult').addEventListener('click', async () => {
+  const { totalWork, totalTravel, clock, timeline } = computeTotals();
+  const total = totalWork + totalTravel;
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const savedAt = `${now.getMonth()+1}/${now.getDate()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  const stopDetails = state.stops.map(s => ({
+    type: s.type,
+    name: s.name,
+    volume: s.volume,
+    work: workMinutes(s),
+    travelMin: s.travelMin,
+    include: s.include
+  }));
+  const finalDetail = {
+    type: 'final',
+    name: state.finalStop.name,
+    volume: state.finalStop.volume,
+    work: workMinutes(state.finalStop),
+    travelMin: state.finalStop.travelMin,
+    include: state.finalStop.include
+  };
+
+  const rec = {
+    id: 'h' + Date.now(),
+    date: RAW_DATA.date,
+    driver: state.driver,
+    carNo: state.carNo,
+    savedAt,
+    startName: state.startName,
+    startTime: state.startTime,
+    minutesPerM3: state.minutesPerM3,
+    totalWork, totalTravel, total,
+    finalTime: clock,
+    timeline,
+    stopDetails,
+    finalDetail
+  };
+  const history = await loadHistory();
+  history.push(rec);
+  await saveHistory(history);
+  renderHistory();
+});
+
+(async function init(){
+  updateCollabBanner();
+
+  populateDriverSelect();
+  await loadItemMaster();
+  const firstDriver = Object.keys(RAW_DATA.drivers).find(n => RAW_DATA.drivers[n].stops.length > 0) || Object.keys(RAW_DATA.drivers)[0];
+  await loadDriver(firstDriver, false);
+
+  if(HAS_SHARED_STORAGE){
+    setInterval(() => { renderHistory(); }, 20000);
+  }
+})();
+</script>
+</body>
+</html>
