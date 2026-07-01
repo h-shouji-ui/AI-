@@ -529,7 +529,14 @@ async function saveHistoryRecord(rec){
   const value = JSON.stringify(rec);
   if(GAS_URL){
     const url = `${GAS_URL}?action=set&key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`;
-    await fetch(url, { method: 'GET' });
+    showDebug('送信URL文字数: ' + url.length + '文字\nURL先頭: ' + url.substring(0,120) + '...');
+    try{
+      const res = await fetch(url, { method: 'GET' });
+      const text = await res.text();
+      showDebug('GAS応答: ' + text);
+    }catch(e){
+      showDebug('fetchエラー: ' + e.message);
+    }
     return;
   }
   try{
@@ -537,6 +544,17 @@ async function saveHistoryRecord(rec){
     list.push(rec);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
   }catch(e){}
+}
+
+function showDebug(msg){
+  let el = document.getElementById('debugPanel');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'debugPanel';
+    el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1d2b22;color:#9fda9a;font-family:monospace;font-size:11px;padding:10px;z-index:9999;max-height:160px;overflow-y:auto;white-space:pre-wrap;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
 }
 async function deleteHistoryRecord(id){
   const key = HISTORY_PREFIX + id;
