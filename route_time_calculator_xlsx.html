@@ -1200,29 +1200,13 @@ document.getElementById('refreshHistory').addEventListener('click', () => {
 });
 
 document.getElementById('saveResult').addEventListener('click', async () => {
-  const { totalWork, totalTravel, clock, timeline } = computeTotals();
+  const { totalWork, totalTravel, clock } = computeTotals();
   const total = totalWork + totalTravel;
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   const savedAt = `${now.getMonth()+1}/${now.getDate()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-  const stopDetails = state.stops.map(s => ({
-    type: s.type,
-    name: s.name,
-    volume: s.volume,
-    work: workMinutes(s),
-    travelMin: s.travelMin,
-    include: s.include
-  }));
-  const finalDetail = {
-    type: 'final',
-    name: state.finalStop.name,
-    volume: state.finalStop.volume,
-    work: workMinutes(state.finalStop),
-    travelMin: state.finalStop.travelMin,
-    include: state.finalStop.include
-  };
-
+  // サマリーのみ保存（データ量を抑えるため詳細は省く）
   const rec = {
     id: 'h' + Date.now(),
     date: RAW_DATA.date,
@@ -1234,9 +1218,7 @@ document.getElementById('saveResult').addEventListener('click', async () => {
     minutesPerM3: state.minutesPerM3,
     totalWork, totalTravel, total,
     finalTime: clock,
-    timeline,
-    stopDetails,
-    finalDetail
+    stopCount: state.stops.filter(s => s.include && s.type !== 'break').length
   };
   const history = await loadHistory();
   history.push(rec);
