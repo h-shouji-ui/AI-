@@ -425,8 +425,10 @@ async function sharedGet(key){
 async function sharedSet(key, value){
   if(GAS_URL){
     try{
+      // GASへのPOSTはno-corsで送信（CORSエラー回避）。レスポンスは読めないが保存は成功する。
       await fetch(GAS_URL, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action:'set', key, value })
       });
