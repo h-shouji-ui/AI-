@@ -1139,74 +1139,114 @@ function buildHistoryDetail(rec){
   info.textContent = `出発地点：${rec.startName || '-'}　／　㎥あたり：${rec.minutesPerM3}分`;
   wrap.appendChild(info);
 
-  const table = document.createElement('table');
-  table.style.marginTop = '8px';
-  const thead = document.createElement('thead');
-  thead.innerHTML = `<tr>
-    <th style="width:24px;"></th>
-    <th>物件名／注記</th>
-    <th style="width:80px;">容積(㎥)</th>
-    <th style="width:90px;">作業時間</th>
-    <th style="width:90px;">移動時間</th>
-  </tr>`;
-  table.appendChild(thead);
-  const tb = document.createElement('tbody');
-  (rec.stopDetails || []).forEach((s, i) => {
-    const tr = document.createElement('tr');
-    const typeBadge = s.type === 'break' ? '<span class="badge break">休憩</span>' : (s.include ? '' : '<span class="badge note">対象外</span>');
-    tr.innerHTML = `
-      <td style="font-size:11px;color:var(--road);">${i+1}</td>
-      <td>${escapeHtml(s.name || '（無題）')} ${typeBadge}</td>
-      <td>${s.volume || 0}</td>
-      <td>${s.include ? s.work.toFixed(1)+'分' : '-'}</td>
-      <td>${s.travelMin || 0}分</td>
-    `;
-    tb.appendChild(tr);
-  });
-  if(rec.finalDetail){
-    const f = rec.finalDetail;
-    const tr = document.createElement('tr');
-    tr.style.background = '#eef2f7';
-    tr.innerHTML = `
-      <td style="font-size:11px;color:var(--road);">最終</td>
-      <td>${escapeHtml(f.name || '最終荷下ろし場所')}</td>
-      <td>${f.volume || 0}</td>
-      <td>${f.include ? f.work.toFixed(1)+'分' : '-'}</td>
-      <td>${f.travelMin || 0}分</td>
-    `;
-    tb.appendChild(tr);
-  }
-  table.appendChild(tb);
-  wrap.appendChild(table);
+  // 停車リスト
+  const stopsData = rec.stops || rec.stopDetails || [];
+  const finalData = rec.fs || rec.finalDetail;
 
-  const routeTitle = document.createElement('div');
-  routeTitle.className = 'history-detail-subtitle';
-  routeTitle.textContent = 'ルート概観（保存時点）';
-  wrap.appendChild(routeTitle);
+  if(stopsData.length > 0 || finalData){
+    const table = document.createElement('table');
+    table.style.marginTop = '8px';
+    const thead = document.createElement('thead');
+    thead.innerHTML = `<tr>
+      <th style="width:24px;"></th>
+      <th>物件名／注記</th>
+      <th style="width:90px;">作業時間</th>
+      <th style="width:90px;">移動時間</th>
+    </tr>`;
+    table.appendChild(thead);
+    const tb = document.createElement('tbody');
 
-  const strip = document.createElement('div');
-  strip.className = 'route-strip';
-  strip.style.maxHeight = '320px';
-  (rec.timeline || []).forEach((node, i) => {
-    const div = document.createElement('div');
-    div.className = 'node' + (node.isStart ? ' start' : '') + (node.isEnd ? ' end' : '') + (node.isBreak ? ' break' : '');
-    div.innerHTML = `
-      <div class="time">${node.isStart ? node.time : node.arrival}</div>
-      <div class="dot"></div>
-      <div class="name">${node.isBreak ? '☕ ' : ''}${escapeHtml(node.name || '（無題）')}</div>
-    `;
-    strip.appendChild(div);
-    const timeline = rec.timeline;
-    if(i < timeline.length - 1){
-      const next = timeline[i+1];
-      const seg = document.createElement('div');
-      seg.className = 'seg-line';
-      const label = next.isEnd ? '↓ 最終作業終了まで' : `↓ ${next.travelMin}分移動`;
-      seg.innerHTML = `<div class="min"></div><div class="rule"></div><div class="min-text">${label}</div>`;
-      strip.appendChild(seg);
+    stopsData.forEach((s, i) => {
+      // コンパクト形式(n/t/w/i/b)と旧形式(name/travelMin/work/include)の両対応
+      const name = s.n !== undefined ? s.n : (s.name || '');
+      const work = s.w !== undefined ? s.w : (s.work || 0);
+      const travel = s.t !== undefined ? s.t : (s.travelMin || 0);
+      const included = s.i !== undefined ? s.i : (s.include ? 1 : 0);
+      const isBreak = s.b !== undefined ? s.b : (s.type === 'break' ? 1 : 0);
+      const tr = document.createElement('tr');
+      const badge = isBreak ? '<span class="badge break">休憩</span>' : (!included ? '<span class="badge note">対象外</span>' : '');
+      tr.innerHTML = `
+        <td style="font-size:11px;color:var(--road);">${i+1}</td>
+        <td>${escapeHtml(name)} ${badge}</td>
+        <td>${included ? work.toFixed(1)+'分' : '-'}</td>
+        <td>${travel}分</td>
+      `;
+      tb.appendChild(tr);
+    });
+
+    if(finalData){
+      const name = finalData.n !== undefined ? finalData.n : (finalData.name || '最終荷下ろし場所');
+      const work = finalData.w !== undefined ? finalData.w : (finalData.work || 0);
+      const travel = finalData.t !== undefined ? finalData.t : (finalData.travelMin || 0);
+      const tr = document.createElement('tr');
+      tr.style.background = '#eef2f7';
+      tr.innerHTML = `
+        <td style="font-size:11px;color:var(--road);">最終</td>
+        <td>${escapeHtml(name)}</td>
+        <td>${work.toFixed(1)}分</td>
+        <td>${travel}分</td>
+      `;
+      tb.appendChild(tr);
     }
-  });
-  wrap.appendChild(strip);
+    table.appendChild(tb);
+    wrap.appendChild(table);
+  }
+
+  // ルート概観（startTimeから再構築）
+  if(stopsData.length > 0){
+    const subtitle = document.createElement('div');
+    subtitle.className = 'history-detail-subtitle';
+    subtitle.textContent = 'ルート概観（保存時点）';
+    wrap.appendChild(subtitle);
+
+    const strip = document.createElement('div');
+    strip.className = 'route-strip';
+    strip.style.maxHeight = '320px';
+
+    let clock = rec.startTime || '08:10';
+    const nodes = [{ name: rec.startName || '出発', time: clock, isStart: true }];
+
+    stopsData.forEach(s => {
+      const travel = s.t !== undefined ? s.t : (s.travelMin || 0);
+      const work = (s.i !== undefined ? s.i : (s.include ? 1 : 0)) ? (s.w !== undefined ? s.w : (s.work || 0)) : 0;
+      const name = s.n !== undefined ? s.n : (s.name || '');
+      const isBreak = s.b !== undefined ? !!s.b : s.type === 'break';
+      clock = fmtClock(clock, travel);
+      nodes.push({ name, arrival: clock, travelMin: travel, isBreak });
+      clock = fmtClock(clock, work);
+    });
+
+    if(finalData){
+      const travel = finalData.t !== undefined ? finalData.t : (finalData.travelMin || 0);
+      const work = finalData.w !== undefined ? finalData.w : (finalData.work || 0);
+      const name = finalData.n !== undefined ? finalData.n : (finalData.name || '最終荷下ろし場所');
+      clock = fmtClock(clock, travel);
+      nodes.push({ name, arrival: clock, travelMin: travel });
+      clock = fmtClock(clock, work);
+    }
+
+    nodes.push({ name: '業務終了', arrival: clock, isEnd: true });
+
+    nodes.forEach((node, i) => {
+      const div = document.createElement('div');
+      div.className = 'node' + (node.isStart ? ' start' : '') + (node.isEnd ? ' end' : '') + (node.isBreak ? ' break' : '');
+      div.innerHTML = `
+        <div class="time">${node.isStart ? node.time : node.arrival}</div>
+        <div class="dot"></div>
+        <div class="name">${node.isBreak ? '☕ ' : ''}${escapeHtml(node.name || '')}</div>
+      `;
+      strip.appendChild(div);
+      if(i < nodes.length - 1){
+        const next = nodes[i+1];
+        const seg = document.createElement('div');
+        seg.className = 'seg-line';
+        const label = next.isEnd ? '↓ 最終作業終了まで' : `↓ ${next.travelMin || 0}分移動`;
+        seg.innerHTML = `<div class="min"></div><div class="rule"></div><div class="min-text">${label}</div>`;
+        strip.appendChild(seg);
+      }
+    });
+    wrap.appendChild(strip);
+  }
 
   return wrap;
 }
@@ -1258,7 +1298,20 @@ document.getElementById('saveResult').addEventListener('click', async () => {
   const pad = n => String(n).padStart(2,'0');
   const savedAt = `${now.getMonth()+1}/${now.getDate()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-  // サマリーのみ保存（データ量を抑えるため詳細は省く）
+  // 詳細情報をコンパクトにまとめて保存
+  const stops = state.stops.map(s => ({
+    n: s.name,           // name
+    t: s.travelMin || 0, // travelMin
+    w: s.include ? workMinutes(s) : 0, // work
+    i: s.include ? 1 : 0,
+    b: s.type === 'break' ? 1 : 0
+  }));
+  const fs = {
+    n: state.finalStop.name,
+    t: state.finalStop.travelMin || 0,
+    w: state.finalStop.include ? workMinutes(state.finalStop) : 0
+  };
+
   const rec = {
     id: 'h' + Date.now(),
     date: RAW_DATA.date,
@@ -1270,7 +1323,7 @@ document.getElementById('saveResult').addEventListener('click', async () => {
     minutesPerM3: state.minutesPerM3,
     totalWork, totalTravel, total,
     finalTime: clock,
-    stopCount: state.stops.filter(s => s.include && s.type !== 'break').length
+    stops, fs
   };
   await saveHistoryRecord(rec);
   renderHistory();
