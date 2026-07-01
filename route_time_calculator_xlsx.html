@@ -922,7 +922,16 @@ function renderStops(){
       let val = e.target.value;
       if(field === 'volume' || field === 'travelMin' || field === 'breakMin') val = Number(val);
       getTarget(idx)[field] = val;
-      save(); renderStops(); renderSummary(); renderRoute();
+      save();
+      // テキスト入力中はrenderStops()を呼ばない（フォーカスが外れるため）
+      // 数値項目のみサマリー・ルートを即時更新
+      if(field !== 'name'){
+        renderSummary(); renderRoute();
+      }
+    });
+    // フォーカスが外れたときだけ作業時間バッジを更新
+    inp.addEventListener('blur', () => {
+      renderStops(); renderSummary(); renderRoute();
     });
   });
   tbody.querySelectorAll('input[data-field=include]').forEach(inp => {
@@ -1047,6 +1056,9 @@ function renderItemMaster(){
       if(field === 'min') val = Number(val);
       itemMaster[idx][field] = val;
       saveItemMaster();
+      if(field !== 'name') { renderStops(); renderSummary(); }
+    });
+    inp.addEventListener('blur', e => {
       renderStops(); renderSummary();
     });
     inp.addEventListener('change', e => {
