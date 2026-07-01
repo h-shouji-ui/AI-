@@ -425,12 +425,21 @@ async function sharedGet(key){
 async function sharedSet(key, value){
   if(GAS_URL){
     try{
-      // GASへの書き込みもGETで行う（CORSを確実に回避）
-      const url = GAS_URL
+      const getUrl = GAS_URL
         + '?action=set'
         + '&key=' + encodeURIComponent(key)
         + '&value=' + encodeURIComponent(value);
-      await fetch(url, { method: 'GET' });
+      // URL長が2000文字以内ならGET、超えるならPOST(no-cors)
+      if(getUrl.length <= 2000){
+        await fetch(getUrl, { method: 'GET' });
+      } else {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action:'set', key, value })
+        });
+      }
       return true;
     }catch(e){
       console.error('GAS保存エラー', e);
@@ -442,7 +451,6 @@ async function sharedSet(key, value){
       await window.storage.set(key, value, true);
       return true;
     }catch(e){
-      console.error('共有ストレージへの保存に失敗しました', e);
       return false;
     }
   }
