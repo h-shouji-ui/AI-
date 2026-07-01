@@ -389,7 +389,7 @@ const HISTORY_KEY = 'route_calc_history_v1';
 // ↓↓↓ 管理者用：GASウェブアプリをデプロイしたら、発行されたURL（末尾が /exec）を
 //     ここに貼り付けてください。これだけで、このHTMLを開く全員が自動的に
 //     同じGoogleスプレッドシートを共有するようになります（各利用者の設定は不要）。
-const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbz8jXLbSQkGOSeQ8OpP1RE9v4r9TqneF5NTuIHsS_nEEGiTl5vslZmPuB9gou5-cpuF/exec';
+const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbz8jXLbSQkGOSeQ8OpP1RE9v4r9TqneF5NTuIHsS_nEEGiTl5vsIZmPuB9gou5-cpuF/exec';
 // ↑↑↑ 例: 'https://script.google.com/macros/s/AKfycby.../exec'
 
 const GAS_URL_KEY = 'route_calc_gas_url_v1';
@@ -425,13 +425,12 @@ async function sharedGet(key){
 async function sharedSet(key, value){
   if(GAS_URL){
     try{
-      // GASへのPOSTはno-corsで送信（CORSエラー回避）。レスポンスは読めないが保存は成功する。
-      await fetch(GAS_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action:'set', key, value })
-      });
+      // GASへの書き込みもGETで行う（CORSを確実に回避）
+      const url = GAS_URL
+        + '?action=set'
+        + '&key=' + encodeURIComponent(key)
+        + '&value=' + encodeURIComponent(value);
+      await fetch(url, { method: 'GET' });
       return true;
     }catch(e){
       console.error('GAS保存エラー', e);
