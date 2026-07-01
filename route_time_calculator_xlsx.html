@@ -497,11 +497,21 @@ async function saveItemMaster(){
   try{ localStorage.setItem(ITEM_MASTER_KEY, JSON.stringify(itemMaster)); }catch(e){}
 }
 
+const HISTORY_PREFIX = 'hist_';
+
 async function loadHistory(){
-  if(HAS_SHARED_STORAGE){
-    const raw = await sharedGet(HISTORY_KEY);
-    if(raw) return JSON.parse(raw);
-    return [];
+  if(GAS_URL){
+    try{
+      const res = await fetch(`${GAS_URL}?action=list&prefix=${encodeURIComponent(HISTORY_PREFIX)}`);
+      const data = await res.json();
+      if(!data.keys || data.keys.length === 0) return [];
+      const records = await Promise.all(data.keys.map(async k => {
+        const r = await fetch(`${GAS_URL}?action=get&key=${encodeURIComponent(k)}`);
+        const d = await r.json();
+        return d.value ? JSON.parse(d.value) : null;
+      }));
+      return records.filter(Boolean).sort((a,b) => a.id > b.id ? 1 : -1);
+    }catch(e){ console.error('GAS履歴取得エラー', e); return []; }
   }
   try{
     const raw = localStorage.getItem(HISTORY_KEY);
@@ -510,11 +520,34 @@ async function loadHistory(){
   return [];
 }
 async function saveHistory(list){
-  if(HAS_SHARED_STORAGE){
-    await sharedSet(HISTORY_KEY, JSON.stringify(list));
+  if(!GAS_URL){
+    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }catch(e){}
+  }
+}
+async function saveHistoryRecord(rec){
+  const key = HISTORY_PREFIX + rec.id;
+  const value = JSON.stringify(rec);
+  if(GAS_URL){
+    const url = `${GAS_URL}?action=set&key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`;
+    await fetch(url, { method: 'GET' });
     return;
   }
-  try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }catch(e){}
+  try{
+    const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    list.push(rec);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  }catch(e){}
+}
+async function deleteHistoryRecord(id){
+  const key = HISTORY_PREFIX + id;
+  if(GAS_URL){
+    await fetch(`${GAS_URL}?action=delete&key=${encodeURIComponent(key)}`, { method: 'GET' });
+    return;
+  }
+  try{
+    const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]').filter(r => r.id !== id);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  }catch(e){}
 }
 
 
@@ -1063,8 +1096,7 @@ async function renderHistory(){
   tbody.querySelectorAll('button[data-action=removeHistory]').forEach(btn => {
     btn.addEventListener('click', async e => {
       const id = e.target.dataset.id;
-      const list = (await loadHistory()).filter(r => r.id !== id);
-      await saveHistory(list);
+      await deleteHistoryRecord(id);
       renderHistory();
     });
   });
@@ -1222,9 +1254,7 @@ document.getElementById('saveResult').addEventListener('click', async () => {
     finalTime: clock,
     stopCount: state.stops.filter(s => s.include && s.type !== 'break').length
   };
-  const history = await loadHistory();
-  history.push(rec);
-  await saveHistory(history);
+  await saveHistoryRecord(rec);
   renderHistory();
 });
 
