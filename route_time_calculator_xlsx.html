@@ -424,35 +424,37 @@ async function sharedGet(key){
 }
 async function sharedSet(key, value){
   if(GAS_URL){
-    try{
-      const getUrl = GAS_URL
-        + '?action=set'
-        + '&key=' + encodeURIComponent(key)
-        + '&value=' + encodeURIComponent(value);
-      // URL長が2000文字以内ならGET、超えるならPOST(no-cors)
-      if(getUrl.length <= 2000){
-        await fetch(getUrl, { method: 'GET' });
-      } else {
-        await fetch(GAS_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action:'set', key, value })
-        });
-      }
-      return true;
-    }catch(e){
-      console.error('GAS保存エラー', e);
-      return false;
-    }
+    return new Promise((resolve) => {
+      const iframeName = 'gas_frame_' + Date.now();
+      const iframe = document.createElement('iframe');
+      iframe.name = iframeName;
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = GAS_URL;
+      form.target = iframeName;
+
+      [['action','set'],['key',key],['value',value]].forEach(([n,v]) => {
+        const inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = n; inp.value = v;
+        form.appendChild(inp);
+      });
+      document.body.appendChild(form);
+
+      const cleanup = () => {
+        try{ document.body.removeChild(form); }catch(e){}
+        try{ document.body.removeChild(iframe); }catch(e){}
+        resolve(true);
+      };
+      iframe.onload = cleanup;
+      setTimeout(cleanup, 5000);
+      form.submit();
+    });
   }
   if(typeof window !== 'undefined' && window.storage){
-    try{
-      await window.storage.set(key, value, true);
-      return true;
-    }catch(e){
-      return false;
-    }
+    try{ await window.storage.set(key, value, true); return true; }catch(e){ return false; }
   }
   return false;
 }
